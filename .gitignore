@@ -1,0 +1,17 @@
+# Ambiente e caches locais do Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Configuracoes locais e credenciais
+.env
+.env.*
+!.env.example
+
+# Arquivos temporarios do sistema e ferramentas
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log

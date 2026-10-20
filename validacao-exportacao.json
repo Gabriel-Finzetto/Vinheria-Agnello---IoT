@@ -1,0 +1,78 @@
+{
+  "testado_em_utc": "2026-10-20T16:52:51.384633+00:00",
+  "periodo_brasilia": {
+    "inicio": "2026-10-20",
+    "fim": "2026-10-20"
+  },
+  "servidor": "3.135.234.101",
+  "entidade": "urn:ngsi-ld:device:096",
+  "contagens": {
+    "t": 148,
+    "h": 149,
+    "p": 148
+  },
+  "linhas_csv": 445,
+  "verificacoes": [
+    "Consulta real ao STH",
+    "BOM e CSV com ponto e virgula",
+    "Todas as linhas dentro do dia selecionado em Brasilia",
+    "Contagens por sensor iguais as linhas",
+    "Resposta do botao de download",
+    "Falha de consulta nao oferece download parcial",
+    "Periodo invertido rejeitado"
+  ],
+  "arquivo": "historico-validado.csv",
+  "interface_navegador": {
+    "testado_em_utc": "2026-10-20T17:09:08.111570+00:00",
+    "botao_csv": "Conferido: 445 medicoes, t148/h149/p148",
+    "inicio_brasilia": "20/10/2026 12:42:11",
+    "fim_brasilia": "20/10/2026 13:36:58",
+    "datas_sem_registros": "Ausentes das opcoes",
+    "hora_final_anterior_ao_inicio": "Ausente das opcoes",
+    "captura": "painel-exportacao-validada.jpg"
+  },
+  "seletor_data_hora": {
+    "catalogo_real_instantes": 149,
+    "sem_dias_vazios": "Conferido em dias com lacunas e virada de data UTC/Brasilia",
+    "somente_horarios_existentes": true,
+    "fim_igual_ou_posterior_ao_inicio": true,
+    "bloqueio_sem_catalogo": true,
+    "mensagem_antiga_limpa_ao_mudar_intervalo": true,
+    "cache_segundos": 60
+  },
+  "visual": {
+    "linha_graficos_pixels": 4,
+    "bordas_arredondadas": true,
+    "data_e_hora_separadas": true
+  },
+  "tempo_real": {
+    "testado_em_utc": "2026-10-20T17:18:25.648268+00:00",
+    "intervalo_ms": 2000,
+    "repeticoes_de_valores_preservadas": true,
+    "eixo_avanca_sem_novos_valores": true,
+    "consultas_nao_criam_amostras": true,
+    "ausencia_de_leituras_sinalizada": true,
+    "historico_carregado_preservado": true,
+    "ultima_amostra_real": {
+      "t": {
+        "timestamp_utc": "2026-10-20T17:13:07.000000+00:00",
+        "valor": 64.0
+      },
+      "h": {
+        "timestamp_utc": "2026-10-20T17:13:07.000000+00:00",
+        "valor": 61.5
+      },
+      "p": {
+        "timestamp_utc": "2026-10-20T17:13:07.000000+00:00",
+        "valor": 90.0
+      }
+    },
+    "interface_navegador": {
+      "relogio_avancou_de": "14:18:35",
+      "relogio_avancou_ate": "14:19:03",
+      "ultima_medicao_permaneceu": "20/10/2026 14:13:07 Brasilia",
+      "eixo_avancou": true,
+      "captura": "painel-tempo-real-validado.jpg"
+    }
+  }
+}
