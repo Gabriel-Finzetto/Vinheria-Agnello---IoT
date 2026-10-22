@@ -24,7 +24,7 @@ if errorlevel 1 (
 )
 
 :executar
-echo Mantenha esta janela aberta enquanto usar o painel.
-echo Abra http://127.0.0.1:8050 no navegador.
-"%PANEL_PYTHON%" "%~dp0painel_historico_device096.py"
+echo Iniciando painel e adaptador Smart Data Models.
+echo Mantenha esta janela aberta e inicie a simulacao no Wokwi.
+"%PANEL_PYTHON%" -u "%~dp0iniciar_projeto.py"
 pause
