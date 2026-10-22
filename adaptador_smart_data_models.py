@@ -8,6 +8,8 @@ from uuid import uuid4
 import paho.mqtt.client as mqtt
 import requests
 
+from configurar_smart_data_models import configurar_fiware
+
 
 IP_ADDRESS = "3.135.234.101"
 MQTT_PORT = 1883
@@ -189,9 +191,19 @@ def main():
     print("Mantenha esta janela aberta e execute o Wokwi. Para encerrar: Ctrl+C.")
 
     try:
-        client.connect_async(IP_ADDRESS, MQTT_PORT, MQTT_KEEPALIVE)
-        client.loop_start()
         with requests.Session() as sessao:
+            for tentativa in range(1, MAX_TENTATIVAS + 1):
+                try:
+                    configurar_fiware(sessao)
+                    print("[FIWARE] Historico DeviceMeasurement configurado. Endpoint antigo desativado.")
+                    break
+                except (requests.RequestException, RuntimeError, ValueError) as erro:
+                    print(f"[FIWARE] Falha ao configurar, tentativa {tentativa}: {erro}")
+                    if tentativa == MAX_TENTATIVAS:
+                        return
+                    time.sleep(INTERVALO_REENVIO)
+            client.connect_async(IP_ADDRESS, MQTT_PORT, MQTT_KEEPALIVE)
+            client.loop_start()
             while True:
                 try:
                     data_utc, valores = fila.get(timeout=1)

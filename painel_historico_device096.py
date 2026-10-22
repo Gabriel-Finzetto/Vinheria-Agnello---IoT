@@ -4,6 +4,7 @@ Consulta o mesmo STH-Comet, com dados separados por sensor e horario de Brasilia
 """
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 import math
 
 import dash
@@ -12,14 +13,17 @@ from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 import requests
 
-from exportar_historico import consultar_disponibilidade, exportar_intervalo
+from exportar_historico import (
+    ENTIDADES, ENTITY_TYPE, SOURCE_ATTRIBUTE, _valores_pagina,
+    consultar_disponibilidade, exportar_intervalo,
+)
 
 # Configuracoes editaveis
 IP_ADDRESS = "3.135.234.101"
 PORT_STH = 8666
+PORT_ORION = 1026
 FIWARE_SVC = "smart"
 FIWARE_SSP = "/"
-ENTITY_ID = "urn:ngsi-ld:device:096"
 LAST_N = 100
 MAX_POINTS = 500
 REFRESH_MS = 2_000  # Consulta o servidor mesmo quando os valores nao mudam.
@@ -36,33 +40,82 @@ SENSORS = {
 }
 
 
-def get_attr_values(attr, last_n):
-    """Retorna amostras UTC e eventual erro, sem inventar medicoes."""
+def instante_utc(texto):
+    instante = datetime.fromisoformat(texto.replace("Z", "+00:00"))
+    if instante.tzinfo is None or instante.utcoffset() is None:
+        raise ValueError("A medição está sem fuso horário.")
+    return instante.astimezone(timezone.utc)
+
+
+def get_attr_values(attr, last_n=LAST_N, *, inicio=None, fim=None):
     url = (f"http://{IP_ADDRESS}:{PORT_STH}/STH/v1/contextEntities/"
-           f"type/device/id/{ENTITY_ID}/attributes/{attr}")
+           f"type/{ENTITY_TYPE}/id/{ENTIDADES[attr]}/attributes/{SOURCE_ATTRIBUTE}")
     headers = {"fiware-service": FIWARE_SVC, "fiware-servicepath": FIWARE_SSP}
     try:
-        response = requests.get(url, params={"lastN": last_n}, headers=headers, timeout=(2, 3))
-        response.raise_for_status()
-        values = response.json()["contextResponses"][0]["contextElement"]["attributes"][0]["values"]
         out = []
-        for entry in values:
-            try:
-                instant = datetime.fromisoformat(entry["recvTime"].replace("Z", "+00:00"))
-                if instant.tzinfo is None:
-                    instant = instant.replace(tzinfo=timezone.utc)
-                value = float(entry["attrValue"])
-                if math.isfinite(value):
-                    out.append((instant.astimezone(timezone.utc).isoformat(timespec="microseconds"), value))
-            except (KeyError, TypeError, ValueError):
-                continue
-        return out, "" if out else "Sem amostras na resposta do histórico."
-    except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as exc:
+        offset, paginas_vistas = 0, set()
+        with requests.Session() as sessao:
+            while True:
+                parametros = {"lastN": last_n}
+                if inicio is not None:
+                    parametros = {
+                        "hLimit": 100, "hOffset": offset,
+                        "dateFrom": inicio.isoformat().replace("+00:00", "Z"),
+                        "dateTo": fim.isoformat().replace("+00:00", "Z"),
+                    }
+                response = sessao.get(url, params=parametros, headers=headers, timeout=(2, 3))
+                response.raise_for_status()
+                values = _valores_pagina(response.json(), attr)
+                pagina = []
+                for entry in values:
+                    instant = instante_utc(entry["recvTime"])
+                    value = float(entry["attrValue"])
+                    if not math.isfinite(value):
+                        raise ValueError("O histórico contém valor não numérico.")
+                    pagina.append((instant.isoformat(timespec="microseconds"), value))
+                assinatura = tuple(pagina)
+                if pagina and assinatura in paginas_vistas:
+                    raise ValueError("O servidor repetiu uma página do histórico.")
+                paginas_vistas.add(assinatura)
+                out.extend(pagina)
+                if inicio is None or len(values) < 100:
+                    break
+                offset += len(values)
+        return out, ""
+    except (requests.RequestException, RuntimeError, KeyError, IndexError, TypeError, ValueError) as exc:
         return [], f"Falha na consulta: {exc}"
 
 
+def get_latest_values():
+    headers = {"fiware-service": FIWARE_SVC, "fiware-servicepath": FIWARE_SSP}
+    try:
+        response = requests.get(
+            f"http://{IP_ADDRESS}:{PORT_ORION}/v2/entities",
+            params={"type": ENTITY_TYPE, "id": ",".join(ENTIDADES.values())},
+            headers=headers, timeout=(2, 3),
+        )
+        response.raise_for_status()
+        referencia = parsedate_to_datetime(response.headers["Date"]).astimezone(timezone.utc)
+        por_id = {entity["id"]: entity for entity in response.json()}
+        out = {}
+        for attr, entity_id in ENTIDADES.items():
+            entity = por_id.get(entity_id)
+            if entity is None:
+                continue
+            if entity.get("type") != ENTITY_TYPE:
+                raise ValueError("Tipo de entidade inesperado no Orion.")
+            value = float(entity[SOURCE_ATTRIBUTE]["value"])
+            if not math.isfinite(value):
+                raise ValueError("O Orion retornou um valor não numérico.")
+            instant = instante_utc(entity["dateObserved"]["value"])
+            out[attr] = (instant.isoformat(timespec="microseconds"), value)
+        return out, "", referencia
+    except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
+        return {}, f"Falha na leitura atual: {exc}", None
+
+
 def local_time(iso_utc):
-    return datetime.fromisoformat(iso_utc.replace("Z", "+00:00")).astimezone(TZ_BRASILIA)
+    return instante_utc(iso_utc).astimezone(TZ_BRASILIA)
 
 
 app = dash.Dash(__name__)
@@ -117,7 +170,7 @@ app.layout = lambda: html.Div(
                   html.P(id="consulta-status", children="Consultando o histórico…", className="section-description"),
                   dcc.RadioItems(id="modo-grafico", value="ao-vivo", inline=True, className="chart-mode",
                       options=[{"label": f"Ao vivo · últimos {JANELA_AO_VIVO_MINUTOS} minutos", "value": "ao-vivo"},
-                               {"label": "Histórico carregado", "value": "historico"}]),
+                                {"label": "Leituras carregadas · até 500 por sensor", "value": "historico"}]),
                   ], className="charts-heading"),
         *[
             html.Section(
@@ -131,7 +184,8 @@ app.layout = lambda: html.Div(
             )
             for attr, sensor in SENSORS.items()
         ],
-        dcc.Store(id="store", data={attr: {"ts": [], "y": [], "error": ""} for attr in SENSORS}),
+        dcc.Store(id="store", storage_type="local",
+                  data={attr: {"ts": [], "y": [], "error": ""} for attr in SENSORS}),
         dcc.Store(id="catalogo-horarios", data={"instantes": [], "erro": ""}),
         dcc.Store(id="intervalo-escolhido"),
         dcc.Store(id="exportacao-ocupada", data=False),
@@ -291,29 +345,43 @@ def mostrar_resultado_exportacao(resultado, intervalo, ocupada):
 )
 def on_tick(_, store):
     store = store or {}
-    # As tres consultas em paralelo evitam somar os tempos de espera.
+    if store.get("_source") != "DeviceMeasurement:096":
+        store = {}
+    atuais, erro_atual, agora = get_latest_values()
+    agora = agora or datetime.now(timezone.utc)
+    inicio = agora - timedelta(minutes=JANELA_AO_VIVO_MINUTOS)
+    fim = agora + timedelta(seconds=1)
+
+    def carregar(attr):
+        recentes, erro = get_attr_values(attr, inicio=inicio, fim=fim)
+        if not store.get(attr, {}).get("ts"):
+            anteriores, erro_anterior = get_attr_values(attr, LAST_N)
+            recentes = anteriores + recentes
+            erro = erro or erro_anterior
+        return recentes, erro
+
     with ThreadPoolExecutor(max_workers=3) as pool:
-        batches = list(pool.map(lambda attr: get_attr_values(attr, LAST_N), SENSORS))
+        batches = list(pool.map(carregar, SENSORS))
 
     updated = {}
     for attr, (batch, error) in zip(SENSORS, batches):
         previous = store.get(attr, {"ts": [], "y": []})
-        # Cada atributo possui sua propria serie: nunca mistura as unidades.
         readings = dict(zip(previous["ts"], previous["y"]))
         readings.update(batch)
+        if attr in atuais:
+            instant, value = atuais[attr]
+            readings[instant] = value
         readings = sorted(readings.items())[-MAX_POINTS:]
         updated[attr] = {
             "ts": [ts for ts, _ in readings],
             "y": [value for _, value in readings],
-            "error": error,
+            "error": " ".join(filter(None, (error, erro_atual))),
         }
 
-    # A consulta sempre atualiza este relogio, mesmo sem novas amostras no STH.
-    # Ele move o eixo de tempo, sem criar pontos que o sensor nao enviou.
-    agora = datetime.now(timezone.utc)
+    updated["_source"] = "DeviceMeasurement:096"
     updated["_consulta_utc"] = agora.isoformat(timespec="microseconds")
     now = agora.astimezone(TZ_BRASILIA).strftime("Data: %d/%m/%Y | Hora: %H:%M:%S")
-    status = f"Painel atualizado — {now} (Brasília)."
+    status = f"Servidor consultado — {now} (Brasília)."
     if any(updated[attr]["error"] for attr in SENSORS):
         status += " Confira a mensagem do sensor; os pontos anteriores foram mantidos."
     return updated, status
@@ -338,8 +406,8 @@ def draw_figures(store, modo="ao-vivo"):
         if modo == "ao-vivo":
             pontos = [(instant, value) for instant, value in pontos
                       if limite_inicial <= local_time(instant) <= limite_final]
-        # Retira o offset somente na exibicao para o grafico manter a hora local.
-        local_x = [local_time(instant).strftime("%Y-%m-%dT%H:%M:%S.%f") for instant, _ in pontos]
+        local_x = [local_time(instant).replace(tzinfo=None).isoformat(timespec="milliseconds")
+                   for instant, _ in pontos]
         fig = go.Figure(go.Scatter(
             x=local_x, y=[value for _, value in pontos], mode="lines+markers", name=sensor["label"],
             line={"color": sensor["color"], "width": 4},
@@ -352,17 +420,18 @@ def draw_figures(store, modo="ao-vivo"):
             template="plotly_white", height=325,
             font={"family": "Arial, sans-serif", "size": 14, "color": "#34445c"},
             margin={"l": 70, "r": 25, "t": 15, "b": 65},
-            hovermode="x unified", uirevision=f"sensor-{attr}-{modo}",
+            hovermode="x unified", uirevision=(f"sensor-{attr}-{modo}-{agora.isoformat()}"
+                                                if modo == "ao-vivo" else f"sensor-{attr}-{modo}"),
         )
         fig.update_xaxes(type="date", tickformat="%d/%m<br>%H:%M:%S", showspikes=True,
                          gridcolor="#e4eaf2", gridwidth=1.2, showline=True, linecolor="#afbdce", linewidth=1.5)
         fig.update_yaxes(gridcolor="#e4eaf2", gridwidth=1.2, zerolinecolor="#afbdce", zerolinewidth=1.5)
         if modo == "ao-vivo":
-            # A janela acompanha o relogio, independentemente da mudanca de valor.
             fig.update_xaxes(autorange=False, range=[
-                limite_inicial.strftime("%Y-%m-%dT%H:%M:%S.%f"),
-                limite_final.strftime("%Y-%m-%dT%H:%M:%S.%f"),
+                limite_inicial.replace(tzinfo=None).isoformat(timespec="milliseconds"),
+                limite_final.replace(tzinfo=None).isoformat(timespec="milliseconds"),
             ])
+            fig.update_yaxes(autorange=True)
             fig.add_shape(type="line", x0=agora.strftime("%Y-%m-%dT%H:%M:%S.%f"),
                           x1=agora.strftime("%Y-%m-%dT%H:%M:%S.%f"), y0=0, y1=1, yref="paper",
                           line={"color": "#8395ac", "width": 1.5, "dash": "dot"})
@@ -385,11 +454,13 @@ def draw_figures(store, modo="ao-vivo"):
                 estado, classe = f"Sem novas leituras há {atraso}", "reading-stale"
             else:
                 estado, classe = "Recebendo leituras", "reading-live"
+            quantidade = (f"{len(pontos)} leituras nos últimos {JANELA_AO_VIVO_MINUTOS} minutos"
+                          if modo == "ao-vivo" else f"{len(ts)} leituras carregadas")
             text = (f"Última medição: {values[-1]:.1f} {sensor['unit']} • "
-                    f"Data e hora: {when} • {len(ts)} pontos carregados.")
+                    f"Data e hora: {when} • {quantidade}.")
         else:
             estado, classe = "Aguardando leituras", "reading-stale"
-            text = "Sem registros carregados. Inicie o Wokwi e confira a assinatura no STH-Comet."
+            text = "Sem registros carregados. Execute o projeto pelo .bat e inicie o Wokwi."
         if series.get("error"):
             text += " " + series["error"]
         statuses.append([html.Span(estado, className=f"reading-badge {classe}"), html.Span(text)])

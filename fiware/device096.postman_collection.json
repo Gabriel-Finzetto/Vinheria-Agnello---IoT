@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Vinheria Agnello - IoT - device096",
-    "description": "Cadastro, consultas NGSIv2 e historico STH-Comet do CP05. Consulte os recursos antes de executar POST; nao recrie cadastro nem assinatura existentes. Importar nao executa requisicoes.",
+    "name": "Vinheria Agnello - IoT - DeviceMeasurement 096",
+    "description": "Consultas das tres entidades DeviceMeasurement e do historico numValue. O inicializador do projeto configura a assinatura e desativa o endpoint antigo.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -16,7 +16,7 @@
   ],
   "item": [
     {
-      "name": "1 - Consultar grupo TEF",
+      "name": "1 - Todas as medicoes padronizadas do device096",
       "request": {
         "method": "GET",
         "header": [
@@ -31,13 +31,12 @@
             "type": "text"
           }
         ],
-        "url": "http://{{servidor}}:4041/iot/services",
-        "description": "Confira o grupo TEF no servico smart e caminho /. O servidor do professor fornece esse grupo compartilhado."
+        "url": "http://{{servidor}}:1026/v2/entities?type=DeviceMeasurement&idPattern=%5Eurn:ngsi-ld:DeviceMeasurement:096:.*"
       },
       "response": []
     },
     {
-      "name": "2 - Consultar cadastro device096",
+      "name": "2 - Ultima leitura de temperatura",
       "request": {
         "method": "GET",
         "header": [
@@ -52,48 +51,12 @@
             "type": "text"
           }
         ],
-        "url": "http://{{servidor}}:4041/iot/devices/device096",
-        "description": "HTTP 200: reutilize o cadastro. Apenas se retornar 404, execute a proxima requisicao."
+        "url": "http://{{servidor}}:1026/v2/entities/urn:ngsi-ld:DeviceMeasurement:096:temperature?type=DeviceMeasurement"
       },
       "response": []
     },
     {
-      "name": "3 - Cadastrar device096 - somente se ausente",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "fiware-service",
-            "value": "smart",
-            "type": "text"
-          },
-          {
-            "key": "fiware-servicepath",
-            "value": "/",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "url": "http://{{servidor}}:4041/iot/devices",
-        "description": "Executar somente quando a consulta do device096 retornar 404. Resposta esperada: 201 Created. O grupo TEF compartilhado permanece intacto.",
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"devices\": [\n    {\n      \"device_id\": \"device096\",\n      \"entity_name\": \"urn:ngsi-ld:device:096\",\n      \"entity_type\": \"device\",\n      \"apikey\": \"TEF\",\n      \"protocol\": \"PDI-IoTA-UltraLight\",\n      \"transport\": \"MQTT\",\n      \"timestamp\": true,\n      \"attributes\": [\n        {\n          \"object_id\": \"p\",\n          \"name\": \"p\",\n          \"type\": \"Number\"\n        },\n        {\n          \"object_id\": \"t\",\n          \"name\": \"t\",\n          \"type\": \"Number\"\n        },\n        {\n          \"object_id\": \"h\",\n          \"name\": \"h\",\n          \"type\": \"Number\"\n        },\n        {\n          \"object_id\": \"s\",\n          \"name\": \"s\",\n          \"type\": \"Text\"\n        }\n      ],\n      \"commands\": [\n        {\n          \"name\": \"on\",\n          \"type\": \"command\"\n        },\n        {\n          \"name\": \"off\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "4 - Consultar medicoes no Orion",
+      "name": "3 - Ultima leitura de umidade",
       "request": {
         "method": "GET",
         "header": [
@@ -108,13 +71,12 @@
             "type": "text"
           }
         ],
-        "url": "http://{{servidor}}:1026/v2/entities/urn:ngsi-ld:device:096?type=device",
-        "description": "Depois de iniciar o Wokwi, confira p,t,h e os metadados TimeInstant de cada atributo. O timestamp global tambem pode mudar com o LED."
+        "url": "http://{{servidor}}:1026/v2/entities/urn:ngsi-ld:DeviceMeasurement:096:relativeHumidity?type=DeviceMeasurement"
       },
       "response": []
     },
     {
-      "name": "5 - Conferir assinaturas",
+      "name": "4 - Ultima leitura de luminosidade",
       "request": {
         "method": "GET",
         "header": [
@@ -129,48 +91,12 @@
             "type": "text"
           }
         ],
-        "url": "http://{{servidor}}:1026/v2/subscriptions?limit=1000",
-        "description": "Procure a entidade urn:ngsi-ld:device:096 nas assinaturas. Se ela ja estiver coberta por uma assinatura ativa para o STH e p,t,h, passe direto as consultas. Essa consulta tambem permite conferir timesSent, lastSuccessCode e lastFailureReason depois da ativacao."
+        "url": "http://{{servidor}}:1026/v2/entities/urn:ngsi-ld:DeviceMeasurement:096:relativeLightLevel?type=DeviceMeasurement"
       },
       "response": []
     },
     {
-      "name": "6 - Ativar historico - executar uma vez",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "fiware-service",
-            "value": "smart",
-            "type": "text"
-          },
-          {
-            "key": "fiware-servicepath",
-            "value": "/",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "url": "http://{{servidor}}:1026/v2/subscriptions",
-        "description": "Execute uma unica vez, somente se nao existir assinatura ativa equivalente para esta entidade e p,t,h. Resposta esperada: 201 Created; guarde Headers > Location. O historico passa a guardar as medicoes recebidas apos sua ativacao.",
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"description\": \"CP05 - Historico p,t,h do device096\",\n  \"subject\": {\n    \"entities\": [\n      {\n        \"id\": \"urn:ngsi-ld:device:096\",\n        \"type\": \"device\"\n      }\n    ],\n    \"condition\": {\n      \"attrs\": [\n        \"p\",\n        \"t\",\n        \"h\"\n      ]\n    }\n  },\n  \"notification\": {\n    \"http\": {\n      \"url\": \"http://{{servidor}}:8666/notify\"\n    },\n    \"attrs\": [\n      \"p\",\n      \"t\",\n      \"h\"\n    ],\n    \"attrsFormat\": \"legacy\"\n  }\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "7 - Historico de temperatura",
+      "name": "5 - Conferir assinatura de historico",
       "request": {
         "method": "GET",
         "header": [
@@ -185,13 +111,12 @@
             "type": "text"
           }
         ],
-        "url": "http://{{servidor}}:8666/STH/v1/contextEntities/type/device/id/urn:ngsi-ld:device:096/attributes/t?lastN=10",
-        "description": "Confira values com recvTime e attrValue. Valores constantes tambem geram amostras com novos timestamps. HTTP 200 com values vazio significa que nao ha amostras na resposta."
+        "url": "http://{{servidor}}:1026/v2/subscriptions?limit=1000"
       },
       "response": []
     },
     {
-      "name": "8 - Historico de umidade",
+      "name": "6 - Historico de temperatura",
       "request": {
         "method": "GET",
         "header": [
@@ -206,13 +131,12 @@
             "type": "text"
           }
         ],
-        "url": "http://{{servidor}}:8666/STH/v1/contextEntities/type/device/id/urn:ngsi-ld:device:096/attributes/h?lastN=10",
-        "description": "Confira values com recvTime e attrValue. Valores constantes tambem geram amostras com novos timestamps. HTTP 200 com values vazio significa que nao ha amostras na resposta."
+        "url": "http://{{servidor}}:8666/STH/v1/contextEntities/type/DeviceMeasurement/id/urn:ngsi-ld:DeviceMeasurement:096:temperature/attributes/numValue?lastN=10"
       },
       "response": []
     },
     {
-      "name": "9 - Historico de luminosidade",
+      "name": "7 - Historico de umidade",
       "request": {
         "method": "GET",
         "header": [
@@ -227,8 +151,27 @@
             "type": "text"
           }
         ],
-        "url": "http://{{servidor}}:8666/STH/v1/contextEntities/type/device/id/urn:ngsi-ld:device:096/attributes/p?lastN=10",
-        "description": "Confira values com recvTime e attrValue. Valores constantes tambem geram amostras com novos timestamps. HTTP 200 com values vazio significa que nao ha amostras na resposta."
+        "url": "http://{{servidor}}:8666/STH/v1/contextEntities/type/DeviceMeasurement/id/urn:ngsi-ld:DeviceMeasurement:096:relativeHumidity/attributes/numValue?lastN=10"
+      },
+      "response": []
+    },
+    {
+      "name": "8 - Historico de luminosidade",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "fiware-service",
+            "value": "smart",
+            "type": "text"
+          },
+          {
+            "key": "fiware-servicepath",
+            "value": "/",
+            "type": "text"
+          }
+        ],
+        "url": "http://{{servidor}}:8666/STH/v1/contextEntities/type/DeviceMeasurement/id/urn:ngsi-ld:DeviceMeasurement:096:relativeLightLevel/attributes/numValue?lastN=10"
       },
       "response": []
     }

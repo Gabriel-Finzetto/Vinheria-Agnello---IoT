@@ -12,7 +12,17 @@ from time import monotonic
 import requests
 
 BASE_URL = "http://3.135.234.101:8666"
-ENTITY_ID = "urn:ngsi-ld:device:096"
+ENTITY_TYPE = "DeviceMeasurement"
+SOURCE_ATTRIBUTE = "numValue"
+GRANDEZAS = {
+    "t": "temperature",
+    "h": "relativeHumidity",
+    "p": "relativeLightLevel",
+}
+ENTIDADES = {
+    atributo: f"urn:ngsi-ld:DeviceMeasurement:096:{grandeza}"
+    for atributo, grandeza in GRANDEZAS.items()
+}
 HEADERS = {"fiware-service": "smart", "fiware-servicepath": "/"}
 BRASILIA = timezone(timedelta(hours=-3))
 SENSORES = {
@@ -68,14 +78,14 @@ def _valores_pagina(resposta, atributo):
         if "code" in status and str(status["code"]) != "200":
             raise ValueError(f"STH retornou codigo {status['code']}")
         entidade = contexto["contextElement"]
-        if entidade["id"] != ENTITY_ID:
+        if entidade["id"] != ENTIDADES[atributo]:
             raise ValueError("a resposta pertence a outra entidade")
-        if entidade.get("type", "device") != "device":
-            raise ValueError("tipo de entidade diferente de device")
+        if entidade.get("type", ENTITY_TYPE) != ENTITY_TYPE:
+            raise ValueError(f"tipo de entidade diferente de {ENTITY_TYPE}")
         atributos = entidade["attributes"]
         if not isinstance(atributos, list) or len(atributos) != 1:
             raise ValueError("quantidade inesperada de atributos")
-        if atributos[0]["name"] != atributo:
+        if atributos[0]["name"] != SOURCE_ATTRIBUTE:
             raise ValueError("a resposta pertence a outro atributo")
         valores = atributos[0]["values"]
         if not isinstance(valores, list):
@@ -89,7 +99,7 @@ def _registro(entrada, atributo, primeiro_instante, ultimo_instante, posicao):
     try:
         if not isinstance(entrada, dict):
             raise ValueError("o registro nao e um objeto")
-        if entrada.get("attrName", atributo) != atributo:
+        if entrada.get("attrName", SOURCE_ATTRIBUTE) != SOURCE_ATTRIBUTE:
             raise ValueError("attrName diferente do atributo solicitado")
         instante_texto = entrada["recvTime"]
         if not isinstance(instante_texto, str):
@@ -132,8 +142,8 @@ def _consultar_historico(primeiro=None, ultimo=None, *, page_size=100):
 
     with requests.Session() as sessao:
         for atributo in SENSORES:
-            url = (f"{BASE_URL}/STH/v1/contextEntities/type/device/id/"
-                   f"{ENTITY_ID}/attributes/{atributo}")
+            url = (f"{BASE_URL}/STH/v1/contextEntities/type/{ENTITY_TYPE}/id/"
+                   f"{ENTIDADES[atributo]}/attributes/{SOURCE_ATTRIBUTE}")
             offset, paginas_vistas, ids_vistos = 0, set(), set()
             while True:
                 parametros = {"hLimit": page_size, "hOffset": offset}
@@ -219,7 +229,7 @@ def _gerar_csv(registros, contagens):
         local = instante.astimezone(BRASILIA)
         sensor, unidade = SENSORES[atributo]
         linha = [instante.isoformat().replace("+00:00", "Z"), local.strftime("%d/%m/%Y"),
-                 local.strftime("%H:%M:%S"), atributo, sensor, valor, unidade]
+                 local.strftime("%H:%M:%S"), GRANDEZAS[atributo], sensor, valor, unidade]
         escritor.writerow(linha + ([identificador or ""] if tem_id else []))
     return "\ufeff" + destino.getvalue(), contagens
 
